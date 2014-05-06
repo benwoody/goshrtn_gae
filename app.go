@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"html/template"
 	"net/http"
+	"strings"
 	"time"
 
 	"appengine"
@@ -101,7 +102,12 @@ func handleNewUrl(w http.ResponseWriter, r *http.Request) {
 
 // Needed to clean up bad urls
 func checkUrl(url string) string {
-        return url
+	if strings.HasPrefix(url, "http://") {
+		return url
+	} else {
+		s := []string{"http://", url}
+		return strings.Join(s, "")
+	}
 }
 
 func generateShortURL() string {
