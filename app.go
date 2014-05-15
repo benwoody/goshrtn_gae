@@ -124,11 +124,12 @@ func checkUrl(uri string) (string, error) {
 	u, err := url.Parse(uri)
 	if err != nil {
 		return "Invalid URL", err
-	} else if u.Host == "" {
+	}
+	if u.IsAbs() {
+		return uri, nil
+	} else {
 		return "Invalid URL", errors.New("Invalid URL structure")
 	}
-
-	return uri, nil
 }
 
 // Generates a random 6 alpha string for the ShortURL
