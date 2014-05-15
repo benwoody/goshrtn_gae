@@ -2,21 +2,26 @@ package goshrtn
 
 import (
 	"crypto/rand"
+	"errors"
 	"html/template"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 
 	"appengine"
 	"appengine/datastore"
 )
 
+// Shorten holds the given URL(LongURL), its shortened version (ShortURL) and
+// the time it was created
 type Shorten struct {
 	LongURL  string
 	ShortURL string
 	Date     time.Time
 }
 
+// Index template for creating new Shorter URLs and displaying created
+// Short URLs
 var newUrlTemplate = template.Must(template.New("url").Parse(`
 <html>
   <head>
@@ -37,16 +42,19 @@ var newUrlTemplate = template.Must(template.New("url").Parse(`
 </html>
 `))
 
+// Initialize net/http handlers and routes
 func init() {
 	http.HandleFunc("/", handleRoot)
 	http.HandleFunc("/s/", handleRedirect)
 	http.HandleFunc("/new", handleNewUrl)
 }
 
+// Handle data from the AE Datastore
 func shortenKey(c appengine.Context) *datastore.Key {
 	return datastore.NewKey(c, "Shorten", "default_shorten", 0, nil)
 }
 
+// Handler function for returning the Index of Short URLs
 func handleRoot(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
 	q := datastore.NewQuery("Shorten").Ancestor(shortenKey(c)).Order("-Date").Limit(10)
@@ -60,6 +68,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Get the ShortURL from the path after /s and redirect to the LongURL
 func handleRedirect(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.NotFound(w, r)
@@ -78,6 +87,7 @@ func handleRedirect(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Create a new ShortURL
 func handleNewUrl(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.NotFound(w, r)
@@ -85,8 +95,13 @@ func handleNewUrl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c := appengine.NewContext(r)
+	longUrl, badUrl := checkUrl(r.FormValue("longurl"))
+	if badUrl != nil {
+		http.Error(w, badUrl.Error(), http.StatusBadRequest)
+		return
+	}
 	s := Shorten{
-		LongURL:  checkUrl(r.FormValue("longurl")),
+		LongURL:  longUrl,
 		ShortURL: generateShortURL(),
 		Date:     time.Now(),
 	}
@@ -100,16 +115,23 @@ func handleNewUrl(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-// Needed to clean up bad urls
-func checkUrl(url string) string {
-	if strings.HasPrefix(url, "http://") {
-		return url
-	} else {
-		s := []string{"http://", url}
-		return strings.Join(s, "")
+// checkURL validates the URL being passed to LongURL.
+// FIXME As of now, a FQD is needed to create a ShortURL.  This could be
+// handled better:
+//    a. Show better error message with redirect to handleRoot
+//    b. If LongURL is "close" to being a URL, rebuild to FQD
+func checkUrl(uri string) (string, error) {
+	u, err := url.Parse(uri)
+	if err != nil {
+		return "Invalid URL", err
+	} else if u.Host == "" {
+		return "Invalid URL", errors.New("Invalid URL structure")
 	}
+
+	return uri, nil
 }
 
+// Generates a random 6 alpha string for the ShortURL
 func generateShortURL() string {
 	var letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
