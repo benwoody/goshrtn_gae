@@ -29,7 +29,7 @@ var newUrlTemplate = template.Must(template.New("url").Parse(`
   </head>
   <body>
     <form action="/new" method="POST">
-      <div><input type="text"  name="longurl" cols="64"></textarea></div>
+      <div><input type="text" name="longurl" cols="64"></textarea></div>
       <div><input type="submit" value="Shorten URL"></div>
     </form>
 
